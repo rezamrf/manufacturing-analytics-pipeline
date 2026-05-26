@@ -1,0 +1,123 @@
+version: '3.8'
+
+x-kestra-config: &kestra-config
+  image: kestra/kestra:latest
+  environment:
+    KESTRA_CONFIGURATION: |
+      kestra:
+        queue:                
+          type: postgres
+        repository:
+          type: postgres
+        storage:
+          type: local
+          local:
+            base-path: /app/storage
+      datasources:
+        postgres:
+          url: jdbc:postgresql://kestra-postgres:5432/kestra
+          driverClassName: org.postgresql.Driver
+          username: ${KESTRA_DB_USER}
+          password: ${KESTRA_DB_PASSWORD}
+
+services:
+  # 1. Operational Database (Simulasi Source DB Client)
+  postgres-source:
+    image: postgres:15
+    container_name: postgres_source
+    environment:
+      POSTGRES_USER: ${POSTGRES_SOURCE_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_SOURCE_PASSWORD}
+      POSTGRES_DB: manufacturing
+    ports:
+      - "${POSTGRES_SOURCE_PORT}:5432"
+    volumes:
+      - postgres_source_data:/var/lib/postgresql/data
+    networks:
+      - data_network
+
+  # 2. Object Storage (Raw Zone)
+  minio:
+    image: minio/minio:latest
+    container_name: minio_storage
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "${MINIO_API_PORT}:9000"
+      - "${MINIO_CONSOLE_PORT}:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - data_network
+
+  # 3. Data Warehouse & Data Mart (Gold Zone)
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse_dwh
+    environment:
+      CLICKHOUSE_DB: datawarehouse
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ports:
+      - "${CLICKHOUSE_HTTP_PORT}:8123"
+      - "${CLICKHOUSE_NATIVE_PORT}:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    networks:
+      - data_network
+
+  # 4. Kestra Metadata Database (Isolasi dari Source DB)
+  kestra-postgres:
+    image: postgres:15
+    container_name: kestra_postgres
+    environment:
+      POSTGRES_DB: kestra
+      POSTGRES_USER: ${KESTRA_DB_USER}
+      POSTGRES_PASSWORD: ${KESTRA_DB_PASSWORD}
+    volumes:
+      - kestra_db_data:/var/lib/postgresql/data
+    networks:
+      - data_network
+
+  # 5. Kestra Orchestrator
+  kestra:
+    <<: *kestra-config
+    container_name: kestra_server
+    command: server standalone
+    ports:
+      - "${KESTRA_PORT}:8080"
+    volumes:
+      - kestra_storage_data:/app/storage
+    depends_on:
+      - kestra-postgres
+    networks:
+      - data_network
+      
+
+  # 6. BI & Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana_bi
+    ports:
+      - "${GRAFANA_PORT}:3000"
+    environment:
+      - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - data_network
+
+networks:
+  data_network:
+    driver: bridge
+
+volumes:
+  postgres_source_data:
+  minio_data:
+  clickhouse_data:
+  kestra_db_data:
+  kestra_storage_data:
+  grafana_data:
