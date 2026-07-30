@@ -1,5 +1,3 @@
-version: '3.8'
-
 x-kestra-config: &kestra-config
   image: kestra/kestra:latest
   environment:
@@ -86,15 +84,18 @@ services:
   kestra:
     <<: *kestra-config
     container_name: kestra_server
+    user: "root"
     command: server standalone
     ports:
       - "${KESTRA_PORT}:8080"
     volumes:
       - kestra_storage_data:/app/storage
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - kestra-postgres
     networks:
       - data_network
+
       
 
   # 6. BI & Visualization
@@ -105,10 +106,14 @@ services:
       - "${GRAFANA_PORT}:3000"
     environment:
       - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
     volumes:
       - grafana_data:/var/lib/grafana
     networks:
       - data_network
+
 
 networks:
   data_network:

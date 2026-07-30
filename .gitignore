@@ -219,3 +219,7 @@ __marimo__/
 
 # PNG
 *.excalidraw
+
+# mactrashfile
+.DS_Store
+**/.DS_Store

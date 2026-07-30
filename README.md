@@ -24,3 +24,17 @@ Project ini dibangun dengan mengedepankan beberapa *best practices* dalam Data E
 * **Incremental Loading:** Alih-alih melakukan *full overwrite* yang memakan banyak *resource*, pipeline ini menggunakan *watermark* (berdasarkan *timestamp*) untuk hanya mengekstrak data yang baru atau berubah.
 * **Format Parquet & Delta Lake:** Mengganti penggunaan CSV konvensional dengan format berbasis kolom (Parquet) untuk efisiensi *storage* dan kecepatan *read*. Lapisan Delta Lake ditambahkan untuk memungkinkan *time-travel* dan penanganan skema data yang dinamis.
 * **Eliminasi OLTP untuk Analytical Workload:** Menghindari *anti-pattern* dengan tidak memindahkan data analitik dari DWH (ClickHouse) kembali ke *database* baris (seperti MySQL) hanya untuk visualisasi. Grafana langsung melakukan *query* ke ClickHouse, memanfaatkan kecepatan *engine* OLAP secara maksimal.
+
+## Repository Structure
+
+```text
+├── infrastructure/             # Konfigurasi Docker Compose untuk servis lokal (Postgres, MinIO, ClickHouse, Kestra, Grafana)
+├── orchestration/              # Definisi flow/DAG Kestra dalam format YAML
+├── src/
+│   ├── extract/                # Skrip Python untuk ingestion PostgreSQL ke MinIO
+│   ├── transform/              # Logika pemrosesan data menjadi Delta format
+│   ├── load/                   # Skrip integrasi Delta Lake ke ClickHouse
+│   └── utils/                  # Koneksi database dan modul logger
+├── docs/                       # Dokumentasi tambahan dan diagram arsitektur
+├── requirements.txt            # Dependensi Python yang di-generate oleh uv
+└── README.md
