@@ -223,3 +223,6 @@ __marimo__/
 # mactrashfile
 .DS_Store
 **/.DS_Store
+
+# Local utility scripts
+src/transform/read_delta.py
