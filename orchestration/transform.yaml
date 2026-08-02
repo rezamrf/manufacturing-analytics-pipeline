@@ -9,8 +9,7 @@ tasks:
       enabled: true
     taskRunner:
       type: io.kestra.plugin.scripts.runner.docker.Docker
-      image: manufacturing-transform:v1.0
+      image: manufacturing-etl:latest
       pullPolicy: IF_NOT_PRESENT
     commands:
-      - pip install python-dotenv pyarrow
       - python raw_to_deltalake.py --tables "public.dim_machines,public.dim_sensors,public.fact_production_orders,public.fact_sensor_readings" --bucket "manufacturing" --raw-prefix "raw-data/parquet" --delta-prefix "delta"

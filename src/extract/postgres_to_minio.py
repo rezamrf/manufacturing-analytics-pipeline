@@ -21,6 +21,21 @@ except ImportError:  # pragma: no cover - optional dependency for local dev
         return False
 from psycopg2 import sql
 
+
+def load_env() -> None:
+    """Load .env dari cwd, folder script, atau parent — robust untuk runner beda (Kestra / local)."""
+    candidates = [
+        find_dotenv(usecwd=True),
+        find_dotenv(),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"),
+    ]
+    for path in candidates:
+        if path and os.path.exists(path):
+            if load_dotenv(path):
+                print(f"Loaded env dari {path}")
+                return
+
 UPDATED_AT_COLUMN = "updated_at"
 
 
@@ -419,7 +434,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    load_dotenv(find_dotenv(usecwd=True))
+    load_env()
     args = parse_args()
 
     table_specs: list[TableSpec] = []

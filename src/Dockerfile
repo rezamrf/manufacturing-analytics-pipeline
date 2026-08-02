@@ -8,4 +8,8 @@ WORKDIR /app
 RUN pip install --no-cache-dir --timeout 120 --retries 10 \
     boto3 \
     polars \
-    deltalake
+    psycopg2-binary \
+    deltalake \
+    clickhouse-connect \
+    pyarrow \
+    python-dotenv

@@ -1,23 +1,3 @@
-x-kestra-config: &kestra-config
-  image: kestra/kestra:latest
-  environment:
-    KESTRA_CONFIGURATION: |
-      kestra:
-        queue:                
-          type: postgres
-        repository:
-          type: postgres
-        storage:
-          type: local
-          local:
-            base-path: /app/storage
-      datasources:
-        postgres:
-          url: jdbc:postgresql://kestra-postgres:5432/kestra
-          driverClassName: org.postgresql.Driver
-          username: ${KESTRA_DB_USER}
-          password: ${KESTRA_DB_PASSWORD}
-
 services:
   # 1. Operational Database (Simulasi Source DB Client)
   postgres-source:
@@ -82,10 +62,42 @@ services:
 
   # 5. Kestra Orchestrator
   kestra:
-    <<: *kestra-config
+    image: kestra/kestra:latest
     container_name: kestra_server
     user: "root"
     command: server standalone
+    environment:
+      KESTRA_CONFIGURATION: |
+        kestra:
+          queue:
+            type: postgres
+          repository:
+            type: postgres
+          storage:
+            type: local
+            local:
+              base-path: /app/storage
+        datasources:
+          postgres:
+            url: jdbc:postgresql://kestra-postgres:5432/kestra
+            driverClassName: org.postgresql.Driver
+            username: ${KESTRA_DB_USER}
+            password: ${KESTRA_DB_PASSWORD}
+      POSTGRES_SOURCE_HOST: ${POSTGRES_SOURCE_HOST}
+      POSTGRES_SOURCE_USER: ${POSTGRES_SOURCE_USER}
+      POSTGRES_SOURCE_PASSWORD: ${POSTGRES_SOURCE_PASSWORD}
+      POSTGRES_SOURCE_PORT: ${POSTGRES_SOURCE_PORT}
+      POSTGRES_SOURCE_DB: ${POSTGRES_SOURCE_DB}
+      MINIO_HOST: ${MINIO_HOST}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_API_PORT: ${MINIO_API_PORT}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_HTTP_PORT: ${CLICKHOUSE_HTTP_PORT}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
     ports:
       - "${KESTRA_PORT}:8080"
     volumes:
