@@ -5,8 +5,10 @@ from datetime import datetime, timezone
 
 import clickhouse_connect
 import pyarrow as pa
+import pyarrow.parquet as pq
 from deltalake import DeltaTable
 from deltalake.exceptions import DeltaError
+from botocore.exceptions import ClientError
 
 try:
     from dotenv import find_dotenv, load_dotenv
@@ -151,6 +153,38 @@ def normalize_prefix(prefix: str | None) -> str:
     return prefix.strip().strip("/")
 
 
+def read_delta_log(s3, bucket: str, log_key: str) -> list[dict]:
+    try:
+        body = s3.get_object(Bucket=bucket, Key=log_key)["Body"].read().decode("utf-8")
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code")
+        if code in {"NoSuchKey", "404", "NotFound"}:
+            return []
+        raise
+    return [json.loads(line) for line in body.strip().splitlines() if line.strip()]
+
+
+def list_delta_versions(s3, bucket: str, log_prefix: str) -> list[int]:
+    versions: list[int] = []
+    paginator = s3.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=log_prefix):
+        for obj in page.get("Contents", []):
+            name = obj["Key"].rsplit("/", 1)[-1]
+            if name.endswith(".json") and name.split(".")[0].isdigit():
+                versions.append(int(name.split(".")[0]))
+    return sorted(versions)
+
+
+def new_parquet_paths(s3, bucket: str, log_prefix: str, version: int) -> list[str]:
+    """Path parquet yang DITAMBAH di version tertentu (dari aksi 'add' pada log)."""
+    paths: list[str] = []
+    log_key = f"{log_prefix}{version:020d}.json"
+    for action in read_delta_log(s3, bucket, log_key):
+        if "add" in action:
+            paths.append(action["add"]["path"])
+    return paths
+
+
 def load_table(
     s3,
     client,
@@ -164,6 +198,7 @@ def load_table(
     delta_prefix = normalize_prefix(delta_prefix)
 
     delta_path = f"s3://{bucket}/{delta_prefix}/{clean_name}/"
+    log_prefix = f"{delta_prefix}/{clean_name}/_delta_log/"
     state_key = f"{delta_prefix}/state/load/{clean_name}.json"
 
     try:
@@ -180,23 +215,41 @@ def load_table(
         print(f"[{clean_name}] Delta v{version} sudah dimuat (state v{last_version}), skip.")
         return True
 
-    arrow_table = dt.to_pyarrow_table()
-    arrow_table = normalize_timestamps(arrow_table)
-
-    version_array = pa.array([version] * arrow_table.num_rows, type=pa.uint64())
-    arrow_table = arrow_table.append_column(VERSION_COLUMN, version_array)
+    # Cuma version baru (last_version+1 .. version) yang diproses, bukan full snapshot.
+    all_versions = list_delta_versions(s3, bucket, log_prefix)
+    start = int(last_version) + 1 if last_version is not None else 0
+    new_versions = [v for v in all_versions if v >= start]
 
     full_name = f"{database}.{clean_name}"
-    batches = arrow_table.to_batches(max_chunksize=BATCH_SIZE)
-    total_rows = arrow_table.num_rows
+    total_rows = 0
 
-    try:
-        for idx, batch in enumerate(batches, start=1):
-            client.insert_arrow(full_name, batch)
-            print(f"[{clean_name}] v{version} batch {idx}/{len(batches)} ter-load ({batch.num_rows} baris).")
-    except Exception as exc:
-        print(f"[{clean_name}] Gagal insert ke ClickHouse: {exc}")
-        return False
+    for v in new_versions:
+        parquet_paths = new_parquet_paths(s3, bucket, log_prefix, v)
+        if not parquet_paths:
+            print(f"[{clean_name}] v{v} tanpa add parquet, skip.")
+            continue
+
+        frames: list[pa.Table] = []
+        for rel_path in parquet_paths:
+            key = f"{delta_prefix}/{clean_name}/{rel_path}"
+            with pa.BufferReader(s3.get_object(Bucket=bucket, Key=key)["Body"].read()) as buf:
+                frames.append(pq.read_table(buf))
+        arrow_table = pa.concat_tables(frames) if len(frames) > 1 else frames[0]
+
+        arrow_table = normalize_timestamps(arrow_table)
+        version_array = pa.array([v] * arrow_table.num_rows, type=pa.uint64())
+        arrow_table = arrow_table.append_column(VERSION_COLUMN, version_array)
+
+        batches = arrow_table.to_batches(max_chunksize=BATCH_SIZE)
+        try:
+            for idx, batch in enumerate(batches, start=1):
+                client.insert_arrow(full_name, batch)
+                print(f"[{clean_name}] v{v} batch {idx}/{len(batches)} ter-load ({batch.num_rows} baris).")
+        except Exception as exc:
+            print(f"[{clean_name}] Gagal insert ke ClickHouse: {exc}")
+            return False
+
+        total_rows += arrow_table.num_rows
 
     write_state(
         s3,
@@ -210,7 +263,7 @@ def load_table(
             "updated_at": datetime.now(timezone.utc).isoformat(),
         },
     )
-    print(f"[{clean_name}] Load selesai v{version}: {total_rows} baris.")
+    print(f"[{clean_name}] Load selesai s.d. v{version}: {total_rows} baris baru.")
     return True
 
 

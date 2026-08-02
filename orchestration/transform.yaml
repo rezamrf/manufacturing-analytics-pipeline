@@ -2,6 +2,17 @@ id: parquet_to_deltalake
 namespace: manufacturing
 description: "Pipeline transformasi Parquet incremental menjadi Delta Lake di MinIO"
 
+triggers:
+  - id: on_extract_success
+    type: io.kestra.plugin.core.trigger.Flow
+    conditions:
+      - type: io.kestra.plugin.core.condition.ExecutionFlowCondition
+        namespace: manufacturing
+        flowId: postgresql_to_minio
+      - type: io.kestra.plugin.core.condition.ExecutionStatusCondition
+        in:
+          - SUCCESS
+
 tasks:
   - id: transform
     type: io.kestra.plugin.scripts.python.Commands

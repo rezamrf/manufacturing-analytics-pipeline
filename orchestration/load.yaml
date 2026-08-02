@@ -2,6 +2,17 @@ id: deltalake_to_clickhouse
 namespace: manufacturing
 description: "Pipeline load incremental Delta Lake ke ClickHouse"
 
+triggers:
+  - id: on_transform_success
+    type: io.kestra.plugin.core.trigger.Flow
+    conditions:
+      - type: io.kestra.plugin.core.condition.ExecutionFlowCondition
+        namespace: manufacturing
+        flowId: parquet_to_deltalake
+      - type: io.kestra.plugin.core.condition.ExecutionStatusCondition
+        in:
+          - SUCCESS
+
 tasks:
   - id: load
     type: io.kestra.plugin.scripts.python.Commands
@@ -12,4 +23,4 @@ tasks:
       image: manufacturing-etl:latest
       pullPolicy: IF_NOT_PRESENT
     commands:
-      - python delta_to_clickhouse.py --tables "dim_machines,dim_sensors,fact_production_orders,fact_sensor_readings" --unique-keys "dim_machines:machine_id,dim_sensors:sensor_id,fact_production_orders:order_id,fact_sensor_readings:reading_id" --bucket "manufacturing" --delta-prefix "delta" --database "datawarehouse"
+      - python deltalake_to_clickhouse.py --tables "dim_machines,dim_sensors,fact_production_orders,fact_sensor_readings" --unique-keys "dim_machines:machine_id,dim_sensors:sensor_id,fact_production_orders:order_id,fact_sensor_readings:reading_id" --bucket "manufacturing" --delta-prefix "delta" --database "datawarehouse"

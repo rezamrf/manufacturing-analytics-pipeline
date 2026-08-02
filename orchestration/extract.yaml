@@ -2,6 +2,12 @@ id: postgresql_to_minio
 namespace: manufacturing
 description: "Pipeline ekstraksi tabel dari PostgreSQL ke MinIO"
 
+# Schedule harian pukul 23:00. Aktifkan dengan menghapus tanda #.
+#triggers:
+#  - id: daily_schedule
+#    type: io.kestra.plugin.core.trigger.Schedule
+#    cron: "0 23 * * *"
+
 tasks:
   - id: extract
     type: io.kestra.plugin.scripts.python.Commands
