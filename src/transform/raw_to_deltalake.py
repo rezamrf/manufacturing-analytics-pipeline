@@ -19,6 +19,21 @@ except ImportError:  # pragma: no cover - optional dependency for local dev
     def load_dotenv(*_args, **_kwargs) -> bool:
         return False
 
+
+def load_env() -> None:
+    """Load .env dari cwd, folder script, atau parent — robust untuk runner beda (Kestra / local)."""
+    candidates = [
+        find_dotenv(usecwd=True),
+        find_dotenv(),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"),
+    ]
+    for path in candidates:
+        if path and os.path.exists(path):
+            if load_dotenv(path):
+                print(f"Loaded env dari {path}")
+                return
+
 STATE_EXTENSION = ".parquet"
 
 
@@ -34,20 +49,16 @@ def require_env(*keys: str, default: str | None = None) -> str:
 
 def get_s3_client() -> boto3.client:
     access_key = require_env(
-        "MINIO_ROOT_USER", "MINIO_ACCESS_KEY", "AWS_ACCESS_KEY_ID", default="minioadmin"
+        "MINIO_ROOT_USER", "MINIO_ACCESS_KEY", "AWS_ACCESS_KEY_ID"
     )
     secret_key = require_env(
-        "MINIO_ROOT_PASSWORD", "MINIO_SECRET_KEY", "AWS_SECRET_ACCESS_KEY", default="minioadmin"
+        "MINIO_ROOT_PASSWORD", "MINIO_SECRET_KEY", "AWS_SECRET_ACCESS_KEY"
     )
     endpoint = os.getenv("MINIO_ENDPOINT_URL")
     if not endpoint:
-        host = os.getenv("MINIO_HOST")
-        if host:
-            port = os.getenv("MINIO_PORT") or os.getenv("MINIO_API_PORT") or "9000"
-            endpoint = f"http://{host}:{port}"
-        else:
-            port = require_env("MINIO_API_PORT", default="9000")
-            endpoint = f"http://host.docker.internal:{port}"
+        host = require_env("MINIO_HOST", default="host.docker.internal")
+        port = require_env("MINIO_PORT", "MINIO_API_PORT", default="9000")
+        endpoint = f"http://{host}:{port}"
     return boto3.client(
         "s3",
         aws_access_key_id=access_key,
@@ -139,7 +150,7 @@ def basic_transform(df: pl.DataFrame) -> pl.DataFrame:
 def storage_options() -> dict:
     endpoint = (
         os.getenv("MINIO_ENDPOINT_URL")
-        or f"http://host.docker.internal:"
+        or f"http://{require_env('MINIO_HOST', default='host.docker.internal')}:"
         f"{require_env('MINIO_PORT', 'MINIO_API_PORT', default='9000')}"
     )
     return {
@@ -147,10 +158,10 @@ def storage_options() -> dict:
         "AWS_ALLOW_HTTP": "true",
         "AWS_REGION": "us-east-1",
         "AWS_ACCESS_KEY_ID": require_env(
-            "MINIO_ROOT_USER", "MINIO_ACCESS_KEY", "AWS_ACCESS_KEY_ID", default="minioadmin"
+            "MINIO_ROOT_USER", "MINIO_ACCESS_KEY", "AWS_ACCESS_KEY_ID"
         ),
         "AWS_SECRET_ACCESS_KEY": require_env(
-            "MINIO_ROOT_PASSWORD", "MINIO_SECRET_KEY", "AWS_SECRET_ACCESS_KEY", default="minioadmin"
+            "MINIO_ROOT_PASSWORD", "MINIO_SECRET_KEY", "AWS_SECRET_ACCESS_KEY"
         ),
         "AWS_ENDPOINT": endpoint,
     }
@@ -255,7 +266,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    load_dotenv(find_dotenv(usecwd=True))
+    load_env()
     args = parse_args()
     table_list = [t.strip() for t in args.tables.split(",") if t.strip()]
     if not table_list:

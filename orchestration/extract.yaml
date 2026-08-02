@@ -9,8 +9,7 @@ tasks:
       enabled: true
     taskRunner:
       type: io.kestra.plugin.scripts.runner.docker.Docker
-      image: manufacturing-etl:v1.0   
-      pullPolicy: IF_NOT_PRESENT              
+      image: manufacturing-etl:latest
+      pullPolicy: IF_NOT_PRESENT
     commands:
-      - pip install python-dotenv
       - python postgres_to_minio.py --tables "public.dim_machines,public.dim_sensors,public.fact_production_orders,public.fact_sensor_readings" --bucket "manufacturing" --prefix "raw-data"
