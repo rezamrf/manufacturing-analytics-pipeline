@@ -26,8 +26,12 @@ Dashboard portofolio sederhana: 4 panel, masing-masing dari satu materialized vi
    - **Variables → Add variable** `machine`:
      - Type: **Query**
      - Query: `SELECT DISTINCT machine_id FROM datawarehouse.mv_machine_daily`
-     - Ini dipakai filter panel 2 & 3 (lihat bawah).
-   - **Templating**: tidak wajib, tapi variable `machine` memudahkan filter.
+     - Filter panel 2.
+   - **Variables → Add variable** `sensor` *(opsional)*:
+     - Type: **Query**
+     - Query: `SELECT DISTINCT sensor_id FROM datawarehouse.mv_sensor_hourly`
+     - Filter panel 3. Catatan: `machine_id` (`MCH-001`) ≠ `sensor_id` (`MCH-001-S1`) — jangan pakai variable `machine` untuk filter sensor, hasilnya kosong.
+   - **Templating**: tidak wajib, tapi variable memudahkan filter.
 2. **Time range** (kanan atas dashboard): pilih rentang data historis, misal **Custom range** `2026-04-26 00:00:00` s.d. `2026-05-26 23:59:59`. Tanpa ini, data historis (Apr–Mei) tidak tampil karena default Grafana hanya hari ini.
 
 > Setelah Kestra load data baru, cukup ganti time range ke periode terbaru — query otomatis mengikuti.
@@ -98,6 +102,54 @@ ORDER BY actual_qty DESC
 - **Axis**: X = `machine_id` (kategorikal), Y = nilai
 - **Legend**: sembunyikan field selain yang dibutuhkan; atau pertahankan `actual_qty` + `utilization_pct` saja.
 - Kalau variable `machine` dibiarkan `All`, query menampilkan semua mesin; pilih mesin spesifik untuk fokus satu.
+
+---
+
+### Panel 3: Sensor & Anomaly
+
+**Query:**
+```sql
+SELECT reading_hour, sensor_id,
+       avgMerge(avg_val)  AS avg_value,
+       maxMerge(max_val)  AS max_value,
+       minMerge(min_val)  AS min_value
+FROM datawarehouse.mv_sensor_hourly
+GROUP BY reading_hour, sensor_id
+ORDER BY reading_hour
+```
+
+**Settings:**
+- Visualization: **Time series** (line)
+- Title panel: `Sensor & Anomaly`
+- **Field → `avg_value` / `max_value` / `min_value`**: Unit `short`
+- **Thresholds**: *Standard options → Thresholds* — base hijau, misal di atas `90` oranye, di atas `95` merah (nilai abnormal menonjol)
+- **Legend**: pastikan `sensor_id` jadi label seri. Jika satu garis saja, gunakan **Transform → Group by** per `sensor_id`
+- *Opsional*: filter satu sensor dengan variable `sensor` (`SELECT DISTINCT sensor_id FROM datawarehouse.mv_sensor_hourly`)
+
+---
+
+### Panel 4: Anomaly Rate
+
+**Query** (pakai subquery — `anomaly_count` dan `total_readings` adalah state beda tipe; subquery memaksa tiap `*Merge()` dievaluasi jadi nilai final sebelum dihitung rasionya):
+```sql
+SELECT reading_date, anomalies, total_readings,
+       round(anomalies / NULLIF(total_readings, 0) * 100, 2) AS anomaly_rate_pct
+FROM (
+    SELECT reading_date,
+           sumMerge(anomaly_count)    AS anomalies,
+           countMerge(total_readings) AS total_readings
+    FROM datawarehouse.mv_anomaly_daily
+    GROUP BY reading_date
+)
+ORDER BY reading_date
+```
+
+**Settings:**
+- Visualization: **Bar chart**
+- Title panel: `Anomaly Rate`
+- **Field → `anomalies`**: Unit `short`
+- **Field → `anomaly_rate_pct`**: Unit `percent (0-100)`
+- **Thresholds** pada `anomaly_rate_pct`: di atas `5` oranye, di atas `10` merah
 
 ---
 
