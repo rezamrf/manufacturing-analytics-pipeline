@@ -18,6 +18,16 @@ Alur data dalam sistem ini berjalan melalui beberapa tahapan berikut:
 6. **Data Visualization (Grafana):** Grafana terhubung langsung ke ClickHouse untuk memvisualisasikan data dan menyediakan *dashboard* analitik pabrik.
 7. **Orchestration (Kestra):** Seluruh proses di atas (dari ekstraksi hingga *load* ke DWH) dijadwalkan dan dimonitor secara terpusat menggunakan Kestra. Ketiga flow (`extract` → `transform` → `load`) terhubung otomatis: saat flow *extract* sukses, flow *transform* dan *load* berjalan menyusul tanpa intervensi manual.
 
+## Screenshots
+
+**Dashboard Grafana** — 4 panel analitik pabrik (produksi harian, pemanfaatan mesin, sensor & anomaly, anomaly rate):
+
+![Grafana Dashboard](docs/screenshoot/grafana.png)
+
+**Pipeline Execution (Kestra)** — monitor eksekusi flow `extract` → `transform` → `load`:
+
+![Kestra Executions](docs/screenshoot/kestra.png)
+
 ## Key Engineering Decisions
 
 Project ini dibangun dengan mengedepankan beberapa *best practices* dalam Data Engineering modern:
@@ -40,5 +50,4 @@ Project ini dibangun dengan mengedepankan beberapa *best practices* dalam Data E
 │   ├── transform/              # raw_to_deltalake.py — Parquet incremental ke Delta Lake
 │   └── load/                   # delta_to_clickhouse.py — Delta Lake incremental ke ClickHouse
 ├── docs/                       # Diagram arsitektur + panduan dashboard Grafana (grafana-dashboard.md)
-├── requirements.txt            # Dependensi Python yang di-generate oleh uv
 └── README.md
