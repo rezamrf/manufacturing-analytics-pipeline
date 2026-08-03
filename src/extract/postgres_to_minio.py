@@ -13,7 +13,7 @@ import psycopg2
 from botocore.exceptions import ClientError
 try:
     from dotenv import find_dotenv, load_dotenv
-except ImportError:  # pragma: no cover - optional dependency for local dev
+except ImportError: 
     def find_dotenv(*_args, **_kwargs) -> str:
         return ""
 
